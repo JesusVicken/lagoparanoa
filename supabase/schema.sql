@@ -18,7 +18,7 @@ create table if not exists public.escoamentos (
 create index if not exists escoamentos_created_at_idx
   on public.escoamentos (created_at desc);
 
--- RLS: envio anônimo permitido apenas para INSERT -------------------
+-- RLS: envio e leitura pública -------------------------------------
 alter table public.escoamentos enable row level security;
 
 drop policy if exists "anon pode inserir escoamentos" on public.escoamentos;
@@ -27,6 +27,14 @@ create policy "anon pode inserir escoamentos"
   for insert
   to anon, authenticated
   with check (true);
+
+-- Leitura pública para exibir os locais marcados no mapa com foto
+drop policy if exists "anon pode ler escoamentos" on public.escoamentos;
+create policy "anon pode ler escoamentos"
+  on public.escoamentos
+  for select
+  to anon, authenticated
+  using (true);
 
 -- Storage: bucket público para as fotos ------------------------------
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
