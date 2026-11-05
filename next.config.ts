@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Permite acessar o dev server pelo túnel HTTPS (teste no celular).
+  allowedDevOrigins: ["*.trycloudflare.com", "**.pinggy.link"],
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {
