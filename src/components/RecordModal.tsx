@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import type { EscoamentoItem } from "@/lib/types";
-import { CheckIcon, DropletIcon, MapPinIcon, PipeIcon, WindIcon, XIcon } from "./icons";
+import { CheckIcon, DropletIcon, MapPinIcon, PipeIcon, WindIcon, XIcon, ZoomInIcon } from "./icons";
 
 interface RecordModalProps {
   record: EscoamentoItem;
@@ -34,15 +34,18 @@ export default function RecordModal({ record, onClose }: RecordModalProps) {
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-detalhes-titulo"
-      className="fixed inset-0 z-[2000] flex items-end sm:items-center justify-center bg-slate-950/70 p-3 sm:p-4 backdrop-blur-md animate-fade"
+      className="fixed inset-0 z-[2000] flex items-end sm:items-center justify-center bg-slate-950/75 p-0 sm:p-4 backdrop-blur-md animate-fade"
       onClick={onClose}
     >
       <div
-        className="relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl animate-slide-up"
+        className="relative flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[2rem] sm:rounded-3xl bg-white shadow-2xl animate-slide-up border-t sm:border border-slate-200"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Imagem do local com botão fechar */}
-        <div className="relative aspect-video w-full bg-slate-900 overflow-hidden sm:max-h-80">
+        {/* Barra superior de puxar (Mobile Handle) */}
+        <div className="mx-auto mt-3 h-1.5 w-12 rounded-full bg-slate-300 sm:hidden" />
+
+        {/* Foto do local */}
+        <div className="relative aspect-video sm:aspect-[16/10] w-full bg-slate-900 overflow-hidden mt-2 sm:mt-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={record.foto_url}
@@ -51,34 +54,34 @@ export default function RecordModal({ record, onClose }: RecordModalProps) {
             loading="lazy"
           />
 
-          {/* Botão fechar sobre a imagem */}
+          {/* Botão fechar sobre a imagem (área de toque grande para dedos molhados) */}
           <button
             type="button"
             onClick={onClose}
             aria-label="Fechar detalhes"
-            className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full bg-slate-950/60 text-white backdrop-blur-md transition hover:bg-slate-950 active:scale-95"
+            className="absolute right-3 top-3 grid h-11 w-11 place-items-center rounded-full bg-slate-950/70 text-white backdrop-blur-md transition hover:bg-slate-950 active:scale-90 shadow-lg ring-1 ring-white/20"
           >
-            <XIcon className="h-5 w-5" />
+            <XIcon className="h-6 w-6" />
           </button>
 
-          {/* Tag de tipo sobre a foto */}
-          <div className="absolute bottom-3 left-3 flex flex-wrap gap-2">
+          {/* Badges de tipo e odor sobre a imagem */}
+          <div className="absolute bottom-3 left-3 right-3 flex flex-wrap gap-2 pointer-events-none">
             <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold text-white shadow-md backdrop-blur-md ${
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold text-white shadow-lg backdrop-blur-md ring-1 ring-white/20 ${
                 isEsgoto ? "bg-amber-600/95" : "bg-sky-600/95"
               }`}
             >
-              {isEsgoto ? <PipeIcon className="h-3.5 w-3.5" /> : <DropletIcon className="h-3.5 w-3.5" />}
-              {isEsgoto ? "Esgoto" : "Água pluvial / limpa"}
+              {isEsgoto ? <PipeIcon className="h-4 w-4" /> : <DropletIcon className="h-4 w-4" />}
+              {isEsgoto ? "Esgoto identificado" : "Água limpa / pluvial"}
             </span>
 
             {record.mau_cheiro ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-600/95 px-3 py-1 text-xs font-bold text-white shadow-md backdrop-blur-md">
-                <WindIcon className="h-3.5 w-3.5" /> Mau cheiro relatado
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-600/95 px-3 py-1.5 text-xs font-bold text-white shadow-lg backdrop-blur-md ring-1 ring-white/20">
+                <WindIcon className="h-4 w-4" /> Mau cheiro relatado
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 rounded-full bg-slate-900/80 px-2.5 py-1 text-xs font-medium text-slate-200 backdrop-blur-md">
-                <CheckIcon className="h-3 w-3" /> Sem mau cheiro
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-900/85 px-3 py-1.5 text-xs font-semibold text-slate-200 backdrop-blur-md ring-1 ring-white/10">
+                <CheckIcon className="h-3.5 w-3.5 text-emerald-400" /> Sem mau cheiro
               </span>
             )}
           </div>
@@ -87,10 +90,10 @@ export default function RecordModal({ record, onClose }: RecordModalProps) {
         {/* Informações detalhadas */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           <div>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
               Ponto de referência / Descrição
             </span>
-            <p className="mt-1 text-base font-semibold text-slate-800 leading-snug">
+            <p className="mt-1 text-base sm:text-lg font-bold text-slate-900 leading-snug">
               {record.ponto_referencia ? (
                 record.ponto_referencia
               ) : (
@@ -102,35 +105,35 @@ export default function RecordModal({ record, onClose }: RecordModalProps) {
           </div>
 
           <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100 text-xs">
-            <div className="rounded-2xl bg-slate-50 p-3">
-              <span className="text-slate-400 block font-medium">Data do registro</span>
-              <span className="font-semibold text-slate-700 mt-0.5 block">{dataFormatada}</span>
+            <div className="rounded-2xl bg-slate-50 p-3 border border-slate-100">
+              <span className="text-slate-500 block font-medium">Data do registro</span>
+              <span className="font-bold text-slate-800 mt-1 block text-sm">{dataFormatada}</span>
             </div>
 
-            <div className="rounded-2xl bg-slate-50 p-3">
-              <span className="text-slate-400 block font-medium">Coordenadas</span>
-              <span className="font-mono font-semibold text-slate-700 mt-0.5 flex items-center gap-1 truncate">
-                <MapPinIcon className="h-3 w-3 shrink-0 text-brand-600" />
+            <div className="rounded-2xl bg-slate-50 p-3 border border-slate-100">
+              <span className="text-slate-500 block font-medium">Coordenadas no Lago</span>
+              <span className="font-mono font-bold text-slate-800 mt-1 flex items-center gap-1 truncate text-xs">
+                <MapPinIcon className="h-3.5 w-3.5 shrink-0 text-brand-600" />
                 {record.lat.toFixed(5)}, {record.lng.toFixed(5)}
               </span>
             </div>
           </div>
         </div>
 
-        {/* Rodapé do Modal */}
-        <div className="border-t border-slate-100 bg-slate-50 px-5 py-3 flex justify-between items-center">
+        {/* Rodapé com toque amplo */}
+        <div className="border-t border-slate-100 bg-slate-50 px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] flex items-center justify-between gap-3">
           <a
             href={record.foto_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs font-semibold text-brand-700 hover:text-brand-800 underline underline-offset-2"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-700 hover:text-brand-800 active:scale-95 transition"
           >
-            Abrir foto original em nova aba
+            <ZoomInIcon className="h-4 w-4" /> Ver foto original
           </a>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 active:scale-95"
+            className="flex h-12 min-w-28 items-center justify-center rounded-2xl bg-slate-900 px-6 text-sm font-bold text-white shadow-md active:scale-95 transition hover:bg-slate-800"
           >
             Fechar
           </button>

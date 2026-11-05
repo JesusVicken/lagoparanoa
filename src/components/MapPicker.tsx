@@ -37,17 +37,17 @@ const waterPinIcon = L.divIcon({
   className: "record-pin record-pin--water",
   html: `
     <div class="record-pin__body">
-      <svg viewBox="0 0 36 44" width="36" height="44" aria-hidden="true">
-        <path d="M18 2C9.2 2 2 9.2 2 18c0 12.5 16 24 16 24s16-11.5 16-24C34 9.2 26.8 2 18 2z"
+      <svg viewBox="0 0 38 46" width="38" height="46" aria-hidden="true">
+        <path d="M19 2C9.5 2 2 9.5 2 19c0 13 17 25 17 25s17-12 17-25C36 9.5 28.5 2 19 2z"
               fill="#0284c7" stroke="#ffffff" stroke-width="2.5"/>
-        <circle cx="18" cy="18" r="9" fill="#ffffff"/>
-        <path d="M18 12s-3.5 3.8-3.5 6.4a3.5 3.5 0 0 0 7 0C21.5 15.8 18 12 18 12z" fill="#0284c7"/>
+        <circle cx="19" cy="19" r="10" fill="#ffffff"/>
+        <path d="M19 12s-4 4.2-4 7.2a4 4 0 0 0 8 0c0-3-4-7.2-4-7.2z" fill="#0284c7"/>
       </svg>
     </div>
     <div class="record-pin__shadow"></div>`,
-  iconSize: [36, 44],
-  iconAnchor: [18, 42],
-  popupAnchor: [0, -38],
+  iconSize: [38, 46],
+  iconAnchor: [19, 44],
+  popupAnchor: [0, -40],
 });
 
 /** Marcador de ocorrência registrada: Esgoto (âmbar/marrom com tubulação). */
@@ -55,17 +55,17 @@ const sewagePinIcon = L.divIcon({
   className: "record-pin record-pin--sewage",
   html: `
     <div class="record-pin__body">
-      <svg viewBox="0 0 36 44" width="36" height="44" aria-hidden="true">
-        <path d="M18 2C9.2 2 2 9.2 2 18c0 12.5 16 24 16 24s16-11.5 16-24C34 9.2 26.8 2 18 2z"
-              fill="#d97706" stroke="#ffffff" stroke-width="2.5"/>
-        <circle cx="18" cy="18" r="9" fill="#ffffff"/>
-        <path d="M13 14h5a2 2 0 0 1 2 2v6M13 17h3a1 1 0 0 1 1 1v4" fill="none" stroke="#d97706" stroke-width="1.8" stroke-linecap="round"/>
+      <svg viewBox="0 0 38 46" width="38" height="46" aria-hidden="true">
+        <path d="M19 2C9.5 2 2 9.5 2 19c0 13 17 25 17 25s17-12 17-25C36 9.5 28.5 2 19 2z"
+              fill="#b45309" stroke="#ffffff" stroke-width="2.5"/>
+        <circle cx="19" cy="19" r="10" fill="#ffffff"/>
+        <path d="M14 15h5a2 2 0 0 1 2 2v6M14 18h3a1 1 0 0 1 1 1v4" fill="none" stroke="#b45309" stroke-width="2" stroke-linecap="round"/>
       </svg>
     </div>
     <div class="record-pin__shadow"></div>`,
-  iconSize: [36, 44],
-  iconAnchor: [18, 42],
-  popupAnchor: [0, -38],
+  iconSize: [38, 46],
+  iconAnchor: [19, 44],
+  popupAnchor: [0, -40],
 });
 
 interface MapPickerProps {
@@ -77,6 +77,8 @@ interface MapPickerProps {
   userLocation?: (LatLng & { accuracy: number }) | null;
   /** Lista de registros já gravados com foto para exibir no mapa. */
   records?: EscoamentoItem[];
+  /** Se deve mostrar o pino arrastável selecionador (modo registro). */
+  showPickerPin?: boolean;
   /** Incrementado pelo pai para pedir que o mapa voe até `position`. */
   flyToken: number;
   onChange: (pos: LatLng) => void;
@@ -88,31 +90,62 @@ function FlyTo({ position, token }: { position: LatLng; token: number }) {
   const map = useMap();
   useEffect(() => {
     if (token === 0) return;
-    map.flyTo([position.lat, position.lng], Math.max(map.getZoom(), 18), {
+    map.flyTo([position.lat, position.lng], Math.max(map.getZoom(), 17), {
       duration: 0.6,
     });
-    // Só reage ao token — não deve voar a cada arraste do pino.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, map]);
   return null;
 }
 
-/** Redimensiona o mapa caso o container mude de tamanho (ex: alternar tela cheia). */
-function InvalidateSizeWatcher({ isExpanded }: { isExpanded?: boolean }) {
+/** Botões de zoom grandes e táteis (essenciais para dedos molhados em canoas/barcos) */
+function MobileZoomControls() {
+  const map = useMap();
+  return (
+    <div className="absolute right-3.5 top-20 z-[1000] flex flex-col gap-2">
+      <button
+        type="button"
+        onClick={() => map.zoomIn()}
+        aria-label="Aproximar mapa"
+        className="glass grid h-12 w-12 place-items-center rounded-2xl text-slate-800 shadow-lg active:scale-90 font-bold text-2xl select-none"
+      >
+        +
+      </button>
+      <button
+        type="button"
+        onClick={() => map.zoomOut()}
+        aria-label="Afastar mapa"
+        className="glass grid h-12 w-12 place-items-center rounded-2xl text-slate-800 shadow-lg active:scale-90 font-bold text-2xl select-none"
+      >
+        −
+      </button>
+    </div>
+  );
+}
+
+/** Redimensiona o mapa caso o container mude de tamanho */
+function InvalidateSizeWatcher() {
   const map = useMap();
   useEffect(() => {
     const timer = setTimeout(() => {
       map.invalidateSize();
-    }, 200);
+    }, 250);
     return () => clearTimeout(timer);
-  }, [map, isExpanded]);
+  }, [map]);
   return null;
 }
 
-/** Toque no mapa move o pino selecionador (não interfere ao clicar em marcadores existentes). */
-function TapToMove({ onChange }: { onChange: (pos: LatLng) => void }) {
+/** Toque no mapa move o pino selecionador (quando ativo) */
+function TapToMove({
+  enabled,
+  onChange,
+}: {
+  enabled: boolean;
+  onChange: (pos: LatLng) => void;
+}) {
   useMapEvents({
     click(e) {
+      if (!enabled) return;
       onChange({ lat: e.latlng.lat, lng: e.latlng.lng });
     },
   });
@@ -124,6 +157,7 @@ export default function MapPicker({
   initialCenter,
   userLocation,
   records = [],
+  showPickerPin = true,
   flyToken,
   onChange,
   onSelectRecord,
@@ -141,11 +175,11 @@ export default function MapPicker({
   return (
     <MapContainer
       center={[initialCenter.lat, initialCenter.lng]}
-      zoom={17}
+      zoom={16}
       maxZoom={19}
       zoomControl={false}
       className="h-full w-full"
-      attributionControl
+      attributionControl={false}
     >
       <TileLayer
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -154,8 +188,9 @@ export default function MapPicker({
       />
 
       <InvalidateSizeWatcher />
+      <MobileZoomControls />
 
-      {/* Círculo de precisão do GPS do usuário */}
+      {/* Círculo de precisão do GPS da canoa/barco */}
       {userLocation && userLocation.accuracy > 0 && (
         <Circle
           center={[userLocation.lat, userLocation.lng]}
@@ -163,8 +198,8 @@ export default function MapPicker({
           pathOptions={{
             color: "#0e8aa6",
             fillColor: "#22b3cf",
-            fillOpacity: 0.12,
-            weight: 1,
+            fillOpacity: 0.15,
+            weight: 2,
           }}
         />
       )}
@@ -186,18 +221,18 @@ export default function MapPicker({
             icon={isEsgoto ? sewagePinIcon : waterPinIcon}
             eventHandlers={{
               click: (e) => {
-                // Impede que o clique no marcador existente mova o pino selecionador
                 L.DomEvent.stopPropagation(e as unknown as Event);
+                // No celular, abrir diretamente o bottom sheet de detalhes é a melhor experiência!
+                onSelectRecord?.(rec);
               },
             }}
           >
             <Popup className="escoamento-popup" maxWidth={280} minWidth={230}>
               <div className="flex flex-col overflow-hidden rounded-xl bg-white text-slate-800">
-                {/* Imagem do local com badge do tipo */}
                 <div
                   className="group relative aspect-video w-full cursor-pointer overflow-hidden bg-slate-900"
                   onClick={() => onSelectRecord?.(rec)}
-                  title="Clique para ampliar a foto"
+                  title="Toque para ver a foto"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -221,7 +256,6 @@ export default function MapPicker({
                   </span>
                 </div>
 
-                {/* Conteúdo com descrição / ponto de referência */}
                 <div className="p-3">
                   <p className="text-xs font-semibold text-slate-800 leading-snug">
                     {rec.ponto_referencia ? (
@@ -242,7 +276,7 @@ export default function MapPicker({
                   <button
                     type="button"
                     onClick={() => onSelectRecord?.(rec)}
-                    className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl bg-slate-900 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-slate-800 active:scale-95"
+                    className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl bg-slate-900 py-2.5 text-xs font-bold text-white shadow-sm active:scale-95"
                   >
                     Ver foto e detalhes
                   </button>
@@ -253,17 +287,19 @@ export default function MapPicker({
         );
       })}
 
-      {/* Marcador selecionador (arrastável pelo usuário para definir nova localização) */}
-      <Marker
-        draggable={true}
-        position={[position.lat, position.lng]}
-        icon={mainPinIcon}
-        eventHandlers={eventHandlers}
-        autoPan
-      />
+      {/* Marcador selecionador arrastável (apenas no modo de registro) */}
+      {showPickerPin && (
+        <Marker
+          draggable={true}
+          position={[position.lat, position.lng]}
+          icon={mainPinIcon}
+          eventHandlers={eventHandlers}
+          autoPan
+        />
+      )}
 
       <FlyTo position={position} token={flyToken} />
-      <TapToMove onChange={onChange} />
+      <TapToMove enabled={showPickerPin} onChange={onChange} />
     </MapContainer>
   );
 }

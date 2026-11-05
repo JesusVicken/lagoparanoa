@@ -133,3 +133,18 @@ export const VolumeXIcon = (p: IconProps) => (
     <line x1="17" y1="9" x2="23" y2="15" />
   </svg>
 );
+
+export const MapIcon = (p: IconProps) => (
+  <svg {...base} {...p}>
+    <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
+    <line x1="9" y1="3" x2="9" y2="18" />
+    <line x1="15" y1="6" x2="15" y2="21" />
+  </svg>
+);
+
+export const PlusIcon = (p: IconProps) => (
+  <svg {...base} {...p}>
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+);

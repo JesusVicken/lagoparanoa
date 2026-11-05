@@ -10,13 +10,14 @@ import type { EscoamentoItem, LatLng, TipoEscoamento } from "@/lib/types";
 
 import {
   AlertIcon,
+  CameraIcon,
   CheckIcon,
   CrosshairIcon,
   DropletIcon,
+  MapIcon,
   MapPinIcon,
-  MaximizeIcon,
-  MinimizeIcon,
   PipeIcon,
+  RefreshIcon,
   SendIcon,
   SpinnerIcon,
   WindIcon,
@@ -27,7 +28,7 @@ import RecordModal from "./RecordModal";
 // Leaflet acessa `window` — só pode ser carregado no navegador.
 const MapPicker = dynamic(() => import("./MapPicker"), {
   ssr: false,
-  loading: () => <MapPlaceholder label="Carregando mapa…" />,
+  loading: () => <MapPlaceholder label="Carregando mapa do Lago…" />,
 });
 
 /** Centro do Lago Paranoá — usado apenas se a localização for negada. */
@@ -52,34 +53,41 @@ type SubmitState =
   | { status: "success" }
   | { status: "error"; message: string };
 
+type FilterTipo = "todos" | "agua" | "esgoto";
+type ActiveTab = "mapa" | "registro";
+
 function geoErrorMessage(err: GeolocationPositionError | null): string {
   if (!err) return "Seu navegador não oferece geolocalização.";
   switch (err.code) {
     case err.PERMISSION_DENIED:
-      return "Permissão de localização negada. Ative-a nas configurações do navegador ou arraste o pino manualmente.";
+      return "Permissão de localização negada. Ative o GPS para registrar com precisão da água.";
     case err.POSITION_UNAVAILABLE:
-      return "Não foi possível determinar sua posição. Verifique se o GPS está ligado.";
+      return "Não foi possível obter o GPS. Verifique se a localização está ligada.";
     case err.TIMEOUT:
-      return "O GPS demorou demais para responder. Tente novamente em local aberto.";
+      return "O GPS demorou a responder no lago. Tentando novamente...";
     default:
       return "Erro ao obter localização.";
   }
 }
 
 export default function ReportScreen() {
-  // --- Localização -----------------------------------------------------------
+  // --- Navegação mobile por abas ---
+  const [activeTab, setActiveTab] = useState<ActiveTab>("mapa");
+  const [filterTipo, setFilterTipo] = useState<FilterTipo>("todos");
+
+  // --- Localização ---
   const [geo, setGeo] = useState<GeoState>({ status: "locating" });
   const [initialCenter, setInitialCenter] = useState<LatLng | null>(null);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [position, setPosition] = useState<LatLng | null>(null);
   const [flyToken, setFlyToken] = useState(0);
 
-  // --- Registros do mapa -----------------------------------------------------
+  // --- Registros do mapa ---
   const [records, setRecords] = useState<EscoamentoItem[]>([]);
+  const [carregandoRecords, setCarregandoRecords] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<EscoamentoItem | null>(null);
-  const [mapaExpandido, setMapaExpandido] = useState(false);
 
-  // --- Formulário ------------------------------------------------------------
+  // --- Formulário ---
   const [foto, setFoto] = useState<{ blob: Blob; url: string } | null>(null);
   const [processandoFoto, setProcessandoFoto] = useState(false);
   const [tipo, setTipo] = useState<TipoEscoamento | null>(null);
@@ -91,13 +99,16 @@ export default function ReportScreen() {
   const fotoSectionRef = useRef<HTMLElement>(null);
   const tipoSectionRef = useRef<HTMLFieldSetElement>(null);
 
-  /** Busca os registros já cadastrados para marcar no mapa */
+  /** Busca os registros já cadastrados */
   const loadRecords = useCallback(async () => {
+    setCarregandoRecords(true);
     try {
       const data = await fetchEscoamentos();
       setRecords(data);
     } catch (e) {
-      console.warn("Não foi possível carregar os registros anteriores:", e);
+      console.warn("Não foi possível carregar os registros:", e);
+    } finally {
+      setCarregandoRecords(false);
     }
   }, []);
 
@@ -107,16 +118,14 @@ export default function ReportScreen() {
       .then((data) => {
         if (ativo) setRecords(data);
       })
-      .catch((e) => {
-        console.warn("Falha ao carregar escoamentos:", e);
-      });
+      .catch((e) => console.warn(e));
 
     return () => {
       ativo = false;
     };
   }, []);
 
-  /** Pede a posição ao navegador. Na 1ª leitura, define o centro do mapa. */
+  /** Pede a posição ao GPS */
   const requestLocation = useCallback(() => {
     const onSuccess = (pos: GeolocationPosition) => {
       const coords: UserLocation = {
@@ -145,7 +154,6 @@ export default function ReportScreen() {
     navigator.geolocation.getCurrentPosition(onSuccess, onError, GEO_OPTIONS);
   }, []);
 
-  // Solicita a localização assim que o componente monta.
   useEffect(() => {
     requestLocation();
   }, [requestLocation]);
@@ -155,7 +163,17 @@ export default function ReportScreen() {
     requestLocation();
   };
 
-  // Libera o blob URL da foto anterior.
+  const useCurrentGpsForReport = () => {
+    if (userLocation) {
+      setPosition({ lat: userLocation.lat, lng: userLocation.lng });
+      setFlyToken((t) => t + 1);
+      navigator.vibrate?.(40);
+    } else {
+      relocate();
+    }
+  };
+
+  // Libera blob URL da foto anterior
   const fotoUrlRef = useRef<string | null>(null);
   useEffect(() => {
     fotoUrlRef.current = foto?.url ?? null;
@@ -194,7 +212,14 @@ export default function ReportScreen() {
     setPontoReferencia("");
     setMostrarErros(false);
     setSubmit({ status: "idle" });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const startNewReportAtCurrentPosition = () => {
+    if (userLocation) {
+      setPosition({ lat: userLocation.lat, lng: userLocation.lng });
+    }
+    setActiveTab("registro");
+    navigator.vibrate?.(50);
   };
 
   const faltando: string[] = [];
@@ -224,341 +249,430 @@ export default function ReportScreen() {
         pontoReferencia,
       });
       setSubmit({ status: "success" });
-      navigator.vibrate?.([40, 60, 40]);
-      // Atualiza os pontos no mapa para o novo registro aparecer de imediato
-      loadRecords();
+      navigator.vibrate?.([50, 70, 50]);
+      await loadRecords();
     } catch (err) {
       setSubmit({
         status: "error",
-        message: err instanceof Error ? err.message : "Erro inesperado ao enviar.",
+        message: err instanceof Error ? err.message : "Erro ao enviar registro.",
       });
     }
   };
 
   const enviando = submit.status === "sending";
 
+  // Filtros de marcadores
+  const filteredRecords = records.filter((r) => {
+    if (filterTipo === "todos") return true;
+    return r.tipo === filterTipo;
+  });
+
+  const totalAgua = records.filter((r) => r.tipo === "agua").length;
+  const totalEsgoto = records.filter((r) => r.tipo === "esgoto").length;
+
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-xl flex-col bg-slate-50 md:shadow-2xl md:shadow-slate-900/10">
-      {/* Cabeçalho ---------------------------------------------------------- */}
-      <header className="relative z-20 flex items-center justify-between gap-3 bg-gradient-to-r from-brand-800 via-brand-700 to-brand-600 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] text-white">
-        <div className="flex items-center gap-3 min-w-0">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur">
+    <div className="relative flex h-dvh w-full flex-col overflow-hidden bg-slate-900 font-sans text-slate-900 select-none">
+      {/* ==================================================================== */}
+      {/* CABEÇALHO MOBILE (Alto contraste sob luz solar)                     */}
+      {/* ==================================================================== */}
+      <header className="relative z-30 flex shrink-0 items-center justify-between border-b border-brand-900/60 bg-gradient-to-r from-brand-900 via-brand-800 to-brand-700 px-4 py-2.5 pt-[max(0.6rem,env(safe-area-inset-top))] text-white shadow-md">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white/15 text-white ring-1 ring-white/20 backdrop-blur">
             <PipeIcon className="h-6 w-6" />
           </span>
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-100/80">
+            <h1 className="truncate text-base font-extrabold tracking-tight">
               Lago Paranoá
-            </p>
-            <h1 className="truncate text-lg font-bold leading-tight">
-              Registrar escoamento irregular
             </h1>
+            <p className="flex items-center gap-1.5 text-[11px] font-semibold text-brand-200">
+              <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+              {userLocation
+                ? `GPS ±${Math.round(userLocation.accuracy)}m`
+                : geo.status === "locating"
+                ? "Buscando GPS..."
+                : "Lago Paranoá (DF)"}
+            </p>
           </div>
         </div>
 
-        {/* Contador de pontos no topo */}
-        {records.length > 0 && (
-          <div className="shrink-0 rounded-full bg-white/15 px-2.5 py-1 text-xs font-semibold backdrop-blur text-brand-50 border border-white/20">
-            {records.length} {records.length === 1 ? "registro" : "registros"}
-          </div>
-        )}
+        {/* Botão de atualizar dados */}
+        <button
+          type="button"
+          onClick={loadRecords}
+          disabled={carregandoRecords}
+          aria-label="Atualizar registros do mapa"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/10 text-white transition active:scale-90"
+        >
+          <RefreshIcon className={`h-5 w-5 ${carregandoRecords ? "animate-spin" : ""}`} />
+        </button>
       </header>
 
-      {/* Mapa --------------------------------------------------------------- */}
-      <section
-        aria-label="Mapa para marcar e visualizar locais"
-        className={`relative isolate transition-all duration-300 w-full bg-slate-200 ${
-          mapaExpandido
-            ? "fixed inset-0 z-50 h-dvh max-w-none"
-            : "h-[46svh] min-h-80"
-        }`}
-      >
-        {initialCenter && position ? (
-          <MapPicker
-            position={position}
-            initialCenter={initialCenter}
-            userLocation={userLocation}
-            records={records}
-            flyToken={flyToken}
-            onChange={setPosition}
-            onSelectRecord={setSelectedRecord}
-          />
-        ) : (
-          <MapPlaceholder label="Obtendo sua localização…" />
-        )}
-
-        {/* Barra superior de status e legenda */}
-        <div className="pointer-events-none absolute inset-x-0 top-3 z-[1000] flex flex-col items-center gap-1.5 px-3">
-          <div className="glass pointer-events-auto flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-md">
-            <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>
-              {records.length > 0
-                ? `${records.length} ${records.length === 1 ? "local com foto" : "locais com foto"}`
-                : "Arraste o pino até o local"}
-            </span>
-            {records.length > 0 && (
-              <>
-                <span className="text-slate-300">·</span>
-                <span className="text-[11px] text-slate-500 font-normal">
-                  Toque nos pinos para ver a foto
-                </span>
-              </>
+      {/* ==================================================================== */}
+      {/* CONTEÚDO PRINCIPAL (ALTERNÂNCIA DE TELAS)                           */}
+      {/* ==================================================================== */}
+      <main className="relative flex-1 w-full overflow-hidden bg-slate-100">
+        {/* ------------------------------------------------------------------ */}
+        {/* ABA 1: MAPA EM TELA CHEIA (TOUCH FIRST / CAMPO)                   */}
+        {/* ------------------------------------------------------------------ */}
+        {activeTab === "mapa" && (
+          <div className="relative h-full w-full">
+            {initialCenter && position ? (
+              <MapPicker
+                position={position}
+                initialCenter={initialCenter}
+                userLocation={userLocation}
+                records={filteredRecords}
+                showPickerPin={false}
+                flyToken={flyToken}
+                onChange={setPosition}
+                onSelectRecord={setSelectedRecord}
+              />
+            ) : (
+              <MapPlaceholder label="Obtendo coordenadas do Lago…" />
             )}
-          </div>
 
-          {/* Legenda simples dos marcadores */}
-          <div className="flex items-center gap-2.5 rounded-full bg-slate-900/80 px-3 py-1 text-[10px] font-medium text-white shadow-md backdrop-blur-md">
-            <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-sky-400" /> Água
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-amber-500" /> Esgoto
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-brand-400" /> Seu pino
-            </span>
-          </div>
-        </div>
-
-        {/* Controles inferiores do Mapa */}
-        {position && (
-          <div className="absolute inset-x-3 bottom-6 z-[1000] flex items-end justify-between gap-3">
-            <div className="glass rounded-2xl px-3 py-2 shadow-lg">
-              <p className="flex items-center gap-1.5 font-mono text-[11px] font-medium text-slate-700">
-                <MapPinIcon className="h-3.5 w-3.5 text-brand-600" />
-                {position.lat.toFixed(6)}, {position.lng.toFixed(6)}
-              </p>
-              {userLocation && (
-                <p className="mt-0.5 text-[10px] text-slate-500">
-                  Precisão do GPS: ±{Math.round(userLocation.accuracy)} m
-                </p>
-              )}
+            {/* Filtros em pílulas flutuantes no topo do mapa */}
+            <div className="pointer-events-none absolute inset-x-0 top-3 z-[1000] flex justify-center px-3">
+              <div className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-slate-950/85 p-1 text-xs font-bold text-white shadow-xl backdrop-blur-md border border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setFilterTipo("todos")}
+                  className={`rounded-full px-3 py-1.5 transition active:scale-95 ${
+                    filterTipo === "todos"
+                      ? "bg-brand-500 text-white shadow"
+                      : "text-slate-300 hover:text-white"
+                  }`}
+                >
+                  Todos ({records.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterTipo("agua")}
+                  className={`flex items-center gap-1 rounded-full px-3 py-1.5 transition active:scale-95 ${
+                    filterTipo === "agua"
+                      ? "bg-sky-500 text-white shadow"
+                      : "text-slate-300 hover:text-white"
+                  }`}
+                >
+                  <DropletIcon className="h-3.5 w-3.5" />
+                  Água ({totalAgua})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterTipo("esgoto")}
+                  className={`flex items-center gap-1 rounded-full px-3 py-1.5 transition active:scale-95 ${
+                    filterTipo === "esgoto"
+                      ? "bg-amber-600 text-white shadow"
+                      : "text-slate-300 hover:text-white"
+                  }`}
+                >
+                  <PipeIcon className="h-3.5 w-3.5" />
+                  Esgoto ({totalEsgoto})
+                </button>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {/* Botão de Tela Cheia / Reduzir Mapa */}
+            {/* Botão de Centralizar no GPS do remador */}
+            <div className="absolute right-3.5 bottom-24 z-[1000]">
               <button
                 type="button"
-                id="toggle-mapa-expandido-btn"
-                onClick={() => setMapaExpandido((prev) => !prev)}
-                aria-label={mapaExpandido ? "Reduzir mapa" : "Expandir mapa em tela cheia"}
-                title={mapaExpandido ? "Reduzir mapa" : "Ver mapa em tela cheia"}
-                className="glass grid h-13 w-13 shrink-0 place-items-center rounded-2xl text-slate-700 shadow-lg transition active:scale-90"
-              >
-                {mapaExpandido ? (
-                  <MinimizeIcon className="h-5 w-5" />
-                ) : (
-                  <MaximizeIcon className="h-5 w-5" />
-                )}
-              </button>
-
-              {/* Botão de recentralizar */}
-              <button
-                type="button"
-                id="recentralizar-btn"
                 onClick={relocate}
                 disabled={geo.status === "locating"}
-                aria-label="Voltar para minha localização"
-                title="Voltar para minha localização"
-                className="glass grid h-13 w-13 shrink-0 place-items-center rounded-2xl text-brand-700 shadow-lg transition active:scale-90 disabled:opacity-70"
+                aria-label="Centralizar na minha posição na água"
+                title="Minha posição no lago"
+                className="glass grid h-14 w-14 place-items-center rounded-2xl text-brand-700 shadow-xl transition active:scale-90 border border-slate-200"
               >
                 {geo.status === "locating" ? (
-                  <SpinnerIcon className="h-5 w-5" />
+                  <SpinnerIcon className="h-6 w-6 text-brand-600" />
                 ) : (
-                  <CrosshairIcon className="h-5 w-5" />
+                  <CrosshairIcon className="h-7 w-7 text-brand-600" />
                 )}
               </button>
             </div>
-          </div>
-        )}
 
-        {/* Botão flutuante para sair do modo expandido */}
-        {mapaExpandido && (
-          <div className="absolute top-4 right-4 z-[1001]">
-            <button
-              type="button"
-              onClick={() => setMapaExpandido(false)}
-              className="glass flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold text-slate-800 shadow-xl transition active:scale-95"
-            >
-              <MinimizeIcon className="h-4 w-4" /> Fechar tela cheia
-            </button>
-          </div>
-        )}
-      </section>
-
-      {/* Formulário --------------------------------------------------------- */}
-      <form
-        id="escoamento-form"
-        onSubmit={handleSubmit}
-        noValidate
-        className="relative z-10 -mt-5 flex-1 space-y-4 rounded-t-3xl bg-slate-50 px-4 pb-36 pt-5"
-      >
-        <div className="mx-auto -mt-2 mb-1 h-1.5 w-10 rounded-full bg-slate-300" />
-
-        {geo.status === "error" && (
-          <div
-            role="alert"
-            className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900 animate-pop"
-          >
-            <AlertIcon className="mt-0.5 h-5 w-5 shrink-0" />
-            <div className="flex-1 text-sm">
-              <p>{geo.message}</p>
+            {/* Botão Flutuante de Ação Rápida: Registrar Ocorrência Aqui */}
+            <div className="absolute inset-x-4 bottom-5 z-[1000] flex justify-center">
               <button
                 type="button"
-                id="tentar-localizacao-btn"
-                onClick={relocate}
-                className="mt-2 min-h-11 rounded-xl bg-amber-200/70 px-4 font-semibold active:scale-95 transition"
+                onClick={startNewReportAtCurrentPosition}
+                className="flex h-14 w-full max-w-sm items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-r from-brand-600 to-brand-500 text-base font-extrabold text-white shadow-2xl shadow-brand-900/40 active:scale-95 transition"
               >
-                Tentar novamente
+                <CameraIcon className="h-5 w-5" />
+                <span>Registrar ponto com foto</span>
               </button>
             </div>
           </div>
         )}
 
-        {/* 1. Foto */}
-        <section
-          ref={fotoSectionRef}
-          className={`card ${mostrarErros && !foto ? "card--error" : ""}`}
-        >
-          <StepTitle n={1} title="Foto do local" />
-          <PhotoCapture
-            previewUrl={foto?.url ?? null}
-            processing={processandoFoto}
-            onCapture={handleCapture}
-            onClear={clearFoto}
-          />
-          {mostrarErros && !foto && <FieldError>Tire uma foto do escoamento.</FieldError>}
-        </section>
+        {/* ------------------------------------------------------------------ */}
+        {/* ABA 2: FORMULÁRIO DE REGISTRO DIRETO NO BARCO/CANOA               */}
+        {/* ------------------------------------------------------------------ */}
+        {activeTab === "registro" && (
+          <div className="h-full w-full overflow-y-auto overscroll-contain px-4 pt-3 pb-36 max-w-xl mx-auto space-y-4">
+            {/* Aviso de GPS se houver erro */}
+            {geo.status === "error" && (
+              <div
+                role="alert"
+                className="flex items-center gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-3.5 text-amber-900 text-xs font-semibold animate-pop"
+              >
+                <AlertIcon className="h-5 w-5 shrink-0 text-amber-600" />
+                <p className="flex-1">{geo.message}</p>
+                <button
+                  type="button"
+                  onClick={relocate}
+                  className="rounded-xl bg-amber-200 px-3 py-1.5 font-bold active:scale-95 transition"
+                >
+                  Tentar GPS
+                </button>
+              </div>
+            )}
 
-        {/* 2. Tipo */}
-        <fieldset
-          ref={tipoSectionRef}
-          className={`card ${mostrarErros && !tipo ? "card--error" : ""}`}
-        >
-          <legend className="sr-only">Tipo de escoamento</legend>
-          <StepTitle n={2} title="O que está escoando?" />
-          <div className="grid grid-cols-2 gap-3">
-            <TipoOption
-              id="tipo-agua"
-              value="agua"
-              label="Água"
-              hint="Limpa ou pluvial"
-              selected={tipo === "agua"}
-              onSelect={setTipo}
-              icon={<DropletIcon className="h-7 w-7" />}
-              tone="water"
-            />
-            <TipoOption
-              id="tipo-esgoto"
-              value="esgoto"
-              label="Esgoto"
-              hint="Escura ou turva"
-              selected={tipo === "esgoto"}
-              onSelect={setTipo}
-              icon={<PipeIcon className="h-7 w-7" />}
-              tone="sewage"
-            />
-          </div>
-          {mostrarErros && !tipo && <FieldError>Selecione o tipo.</FieldError>}
-        </fieldset>
+            {/* 1. Localização no Lago */}
+            <section className="card p-3.5">
+              <div className="flex items-center justify-between mb-2">
+                <StepTitle n={1} title="Posição no Lago" />
+                <button
+                  type="button"
+                  onClick={useCurrentGpsForReport}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-700 active:scale-95 transition"
+                >
+                  <CrosshairIcon className="h-3.5 w-3.5" /> Usar meu GPS
+                </button>
+              </div>
 
-        {/* 3. Detalhes */}
-        <section className="card space-y-4">
-          <StepTitle n={3} title="Detalhes" />
+              {/* Mapa de ajuste fino do pino */}
+              <div className="relative h-44 w-full overflow-hidden rounded-2xl border border-slate-200">
+                {initialCenter && position ? (
+                  <MapPicker
+                    position={position}
+                    initialCenter={initialCenter}
+                    userLocation={userLocation}
+                    showPickerPin={true}
+                    flyToken={flyToken}
+                    onChange={setPosition}
+                  />
+                ) : (
+                  <MapPlaceholder label="Carregando posição..." />
+                )}
+                <div className="pointer-events-none absolute bottom-2 left-2 right-2 flex justify-between items-center">
+                  <span className="glass rounded-lg px-2 py-1 font-mono text-[10px] font-bold text-slate-800 shadow">
+                    {position?.lat.toFixed(5)}, {position?.lng.toFixed(5)}
+                  </span>
+                  <span className="glass rounded-lg px-2 py-1 text-[10px] font-semibold text-slate-600 shadow">
+                    Arraste o pino se necessário
+                  </span>
+                </div>
+              </div>
+            </section>
 
-          <label
-            htmlFor="mau-cheiro"
-            className="group flex min-h-16 cursor-pointer items-center gap-4 rounded-2xl border border-slate-200 bg-white px-4 transition has-[:checked]:border-rose-300 has-[:checked]:bg-rose-50 active:scale-[0.99]"
-          >
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-slate-100 text-slate-500 transition group-has-[:checked]:bg-rose-100 group-has-[:checked]:text-rose-600">
-              <WindIcon className="h-5 w-5" />
-            </span>
-            <span className="flex-1 text-base font-semibold text-slate-800">
-              Possui mau cheiro?
-            </span>
-            <input
-              id="mau-cheiro"
-              type="checkbox"
-              checked={mauCheiro}
-              onChange={(e) => setMauCheiro(e.target.checked)}
-              className="peer sr-only"
-            />
-            <span className="grid h-8 w-8 place-items-center rounded-lg border-2 border-slate-300 bg-white text-white transition peer-checked:border-rose-500 peer-checked:bg-rose-500 peer-focus-visible:ring-4 peer-focus-visible:ring-rose-200">
-              <CheckIcon className="h-5 w-5" strokeWidth={3} />
-            </span>
-          </label>
-
-          <div>
-            <label
-              htmlFor="ponto-referencia"
-              className="mb-2 block text-sm font-semibold text-slate-700"
+            {/* 2. Foto da Ocorrência */}
+            <section
+              ref={fotoSectionRef}
+              className={`card p-4 ${mostrarErros && !foto ? "card--error" : ""}`}
             >
-              Ponto de referência / Descrição
-            </label>
-            <input
-              id="ponto-referencia"
-              type="text"
-              inputMode="text"
-              autoComplete="off"
-              enterKeyHint="done"
-              maxLength={280}
-              value={pontoReferencia}
-              onChange={(e) => setPontoReferencia(e.target.value)}
-              placeholder="Ex.: próximo à ponte, deck sul, árvore grande"
-              className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15"
-            />
-          </div>
-        </section>
+              <StepTitle n={2} title="Foto do local" />
+              <PhotoCapture
+                previewUrl={foto?.url ?? null}
+                processing={processandoFoto}
+                onCapture={handleCapture}
+                onClear={clearFoto}
+              />
+              {mostrarErros && !foto && <FieldError>Tire uma foto do local do barco.</FieldError>}
+            </section>
 
-        {submit.status === "error" && (
-          <div
-            role="alert"
-            className="flex gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900 animate-pop"
-          >
-            <AlertIcon className="mt-0.5 h-5 w-5 shrink-0" />
-            <p className="flex-1 break-words">{submit.message}</p>
+            {/* 3. Tipo de escoamento */}
+            <fieldset
+              ref={tipoSectionRef}
+              className={`card p-4 ${mostrarErros && !tipo ? "card--error" : ""}`}
+            >
+              <legend className="sr-only">Tipo de escoamento</legend>
+              <StepTitle n={3} title="O que está escoando?" />
+              <div className="grid grid-cols-2 gap-3">
+                <TipoOption
+                  id="tipo-agua"
+                  value="agua"
+                  label="Água"
+                  hint="Limpa ou pluvial"
+                  selected={tipo === "agua"}
+                  onSelect={setTipo}
+                  icon={<DropletIcon className="h-7 w-7" />}
+                  tone="water"
+                />
+                <TipoOption
+                  id="tipo-esgoto"
+                  value="esgoto"
+                  label="Esgoto"
+                  hint="Escura ou turva"
+                  selected={tipo === "esgoto"}
+                  onSelect={setTipo}
+                  icon={<PipeIcon className="h-7 w-7" />}
+                  tone="sewage"
+                />
+              </div>
+              {mostrarErros && !tipo && <FieldError>Selecione se é água ou esgoto.</FieldError>}
+            </fieldset>
+
+            {/* 4. Detalhes */}
+            <section className="card p-4 space-y-3">
+              <StepTitle n={4} title="Detalhes rápidos" />
+
+              <label
+                htmlFor="mau-cheiro"
+                className="group flex min-h-14 cursor-pointer items-center gap-3.5 rounded-2xl border border-slate-200 bg-white px-3.5 transition has-[:checked]:border-rose-400 has-[:checked]:bg-rose-50 active:scale-[0.99]"
+              >
+                <span className="grid h-10 w-10 place-items-center rounded-xl bg-slate-100 text-slate-500 group-has-[:checked]:bg-rose-100 group-has-[:checked]:text-rose-600 transition">
+                  <WindIcon className="h-5 w-5" />
+                </span>
+                <span className="flex-1 text-sm font-bold text-slate-800">
+                  Tem mau cheiro forte?
+                </span>
+                <input
+                  id="mau-cheiro"
+                  type="checkbox"
+                  checked={mauCheiro}
+                  onChange={(e) => setMauCheiro(e.target.checked)}
+                  className="peer sr-only"
+                />
+                <span className="grid h-8 w-8 place-items-center rounded-xl border-2 border-slate-300 bg-white text-white transition peer-checked:border-rose-600 peer-checked:bg-rose-600">
+                  <CheckIcon className="h-5 w-5" strokeWidth={3} />
+                </span>
+              </label>
+
+              <div>
+                <label
+                  htmlFor="ponto-referencia"
+                  className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500"
+                >
+                  Ponto de referência / Descrição
+                </label>
+                <input
+                  id="ponto-referencia"
+                  type="text"
+                  inputMode="text"
+                  autoComplete="off"
+                  enterKeyHint="done"
+                  maxLength={280}
+                  value={pontoReferencia}
+                  onChange={(e) => setPontoReferencia(e.target.value)}
+                  placeholder="Ex.: em frente ao deck sul, próximo ao clube..."
+                  className="h-13 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15"
+                />
+              </div>
+            </section>
+
+            {submit.status === "error" && (
+              <div
+                role="alert"
+                className="flex gap-2.5 rounded-2xl border border-rose-300 bg-rose-50 p-3.5 text-xs font-semibold text-rose-900 animate-pop"
+              >
+                <AlertIcon className="h-5 w-5 shrink-0 text-rose-600" />
+                <p className="flex-1 break-words">{submit.message}</p>
+              </div>
+            )}
           </div>
         )}
-      </form>
+      </main>
 
-      {/* Barra de envio fixa ------------------------------------------------ */}
-      <div className="fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-xl border-t border-slate-200/70 bg-white/85 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl">
-        {mostrarErros && faltando.length > 0 && (
-          <p className="mb-2 text-center text-xs font-medium text-rose-600">
-            Falta: {faltando.join(" e ")}
-          </p>
-        )}
-        <button
-          type="submit"
-          form="escoamento-form"
-          id="enviar-btn"
-          disabled={enviando || !position}
-          className="btn-primary"
-        >
-          {enviando ? (
-            <>
-              <SpinnerIcon className="h-6 w-6" /> Enviando…
-            </>
-          ) : (
-            <>
-              <SendIcon className="h-5 w-5" /> Enviar registro
-            </>
+      {/* ==================================================================== */}
+      {/* BOTÃO FIXO DE ENVIO (QUANDO NA ABA DE REGISTRO)                      */}
+      {/* ==================================================================== */}
+      {activeTab === "registro" && (
+        <div className="fixed inset-x-0 bottom-16 z-30 mx-auto w-full max-w-xl border-t border-slate-200 bg-white/95 px-4 py-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-xl">
+          {mostrarErros && faltando.length > 0 && (
+            <p className="mb-1.5 text-center text-xs font-bold text-rose-600 animate-pop">
+              Falta preencher: {faltando.join(" e ")}
+            </p>
           )}
-        </button>
-      </div>
-
-      {/* Modal de confirmação de envio */}
-      {submit.status === "success" && position && (
-        <SuccessOverlay position={position} onNew={resetForm} />
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={enviando || !position}
+            className="btn-primary h-14 text-base font-extrabold shadow-xl"
+          >
+            {enviando ? (
+              <>
+                <SpinnerIcon className="h-5 w-5" /> Salvando registro…
+              </>
+            ) : (
+              <>
+                <SendIcon className="h-5 w-5" /> Confirmar e Enviar
+              </>
+            )}
+          </button>
+        </div>
       )}
 
-      {/* Modal de exibição da foto e detalhes ao clicar em um ponto do mapa */}
+      {/* ==================================================================== */}
+      {/* BARRA DE NAVEGAÇÃO INFERIOR MOBILE (ALCANCE DO POLEGAR)              */}
+      {/* ==================================================================== */}
+      <nav
+        aria-label="Navegação do aplicativo"
+        className="relative z-40 flex h-16 w-full shrink-0 items-center justify-around border-t border-slate-200/80 bg-white/95 px-3 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl shadow-lg"
+      >
+        <button
+          type="button"
+          onClick={() => setActiveTab("mapa")}
+          className={`flex flex-1 flex-col items-center justify-center gap-1 py-1 transition active:scale-95 ${
+            activeTab === "mapa" ? "text-brand-600 font-extrabold" : "text-slate-400 font-medium"
+          }`}
+        >
+          <div className="relative">
+            <MapIcon className="h-6 w-6" />
+            {records.length > 0 && (
+              <span className="absolute -top-1 -right-2.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-600 px-1 text-[9px] font-bold text-white">
+                {records.length}
+              </span>
+            )}
+          </div>
+          <span className="text-[11px] leading-none">Mapa do Lago</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("registro")}
+          className={`flex flex-1 flex-col items-center justify-center gap-1 py-1 transition active:scale-95 ${
+            activeTab === "registro" ? "text-brand-600 font-extrabold" : "text-slate-400 font-medium"
+          }`}
+        >
+          <div
+            className={`grid h-9 w-9 place-items-center rounded-full transition ${
+              activeTab === "registro"
+                ? "bg-brand-600 text-white shadow-md shadow-brand-600/30"
+                : "bg-slate-100 text-slate-600"
+            }`}
+          >
+            <CameraIcon className="h-5 w-5" />
+          </div>
+          <span className="text-[11px] leading-none">Registrar</span>
+        </button>
+      </nav>
+
+      {/* ==================================================================== */}
+      {/* MODAL / BOTTOM SHEET DE DETALHES DE PONTO                            */}
+      {/* ==================================================================== */}
       {selectedRecord && (
         <RecordModal
           record={selectedRecord}
           onClose={() => setSelectedRecord(null)}
         />
       )}
-    </main>
+
+      {/* ==================================================================== */}
+      {/* OVERLAY DE SUCESSO APÓS REGISTRO                                     */}
+      {/* ==================================================================== */}
+      {submit.status === "success" && position && (
+        <SuccessOverlay
+          position={position}
+          onViewMap={() => {
+            resetForm();
+            setActiveTab("mapa");
+          }}
+          onNew={() => {
+            resetForm();
+          }}
+        />
+      )}
+    </div>
   );
 }
 
@@ -567,21 +681,21 @@ export default function ReportScreen() {
 function MapPlaceholder({ label }: { label: string }) {
   return (
     <div className="map-skeleton flex h-full w-full flex-col items-center justify-center gap-3 text-brand-800">
-      <span className="relative grid h-16 w-16 place-items-center">
+      <span className="relative grid h-14 w-14 place-items-center">
         <span className="absolute inset-0 animate-ping rounded-full bg-brand-500/30" />
         <span className="grid h-12 w-12 place-items-center rounded-full bg-brand-600 text-white shadow-lg">
           <MapPinIcon className="h-6 w-6" />
         </span>
       </span>
-      <p className="text-sm font-semibold">{label}</p>
+      <p className="text-xs font-bold text-slate-700">{label}</p>
     </div>
   );
 }
 
 function StepTitle({ n, title }: { n: number; title: string }) {
   return (
-    <h2 className="mb-3 flex items-center gap-2.5 text-base font-bold text-slate-900">
-      <span className="grid h-7 w-7 place-items-center rounded-full bg-brand-100 text-sm font-bold text-brand-700">
+    <h2 className="flex items-center gap-2 text-sm font-extrabold text-slate-900">
+      <span className="grid h-6 w-6 place-items-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">
         {n}
       </span>
       {title}
@@ -591,7 +705,7 @@ function StepTitle({ n, title }: { n: number; title: string }) {
 
 function FieldError({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mt-3 flex items-center gap-1.5 text-sm font-medium text-rose-600">
+    <p className="mt-2.5 flex items-center gap-1.5 text-xs font-bold text-rose-600">
       <AlertIcon className="h-4 w-4" /> {children}
     </p>
   );
@@ -611,22 +725,22 @@ interface TipoOptionProps {
 function TipoOption({ id, value, label, hint, selected, icon, tone, onSelect }: TipoOptionProps) {
   const tones = {
     water: {
-      on: "border-sky-500 bg-sky-50 text-sky-800 shadow-sky-500/20",
+      on: "border-sky-500 bg-sky-50 text-sky-900 shadow-md ring-2 ring-sky-300",
       icon: "bg-sky-500 text-white",
-      iconOff: "bg-sky-100 text-sky-600",
+      iconOff: "bg-sky-100 text-sky-700",
     },
     sewage: {
-      on: "border-amber-600 bg-amber-50 text-amber-900 shadow-amber-600/20",
+      on: "border-amber-600 bg-amber-50 text-amber-950 shadow-md ring-2 ring-amber-300",
       icon: "bg-amber-600 text-white",
-      iconOff: "bg-amber-100 text-amber-700",
+      iconOff: "bg-amber-100 text-amber-800",
     },
   }[tone];
 
   return (
     <label
       htmlFor={id}
-      className={`relative flex min-h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 p-3 text-center transition active:scale-[0.97] ${
-        selected ? `${tones.on} shadow-lg` : "border-slate-200 bg-white text-slate-700"
+      className={`relative flex min-h-28 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-2xl border-2 p-3 text-center transition active:scale-[0.97] ${
+        selected ? tones.on : "border-slate-200 bg-white text-slate-700"
       }`}
     >
       <input
@@ -639,48 +753,68 @@ function TipoOption({ id, value, label, hint, selected, icon, tone, onSelect }: 
         className="peer sr-only"
       />
       <span
-        className={`grid h-12 w-12 place-items-center rounded-full transition ${
+        className={`grid h-11 w-11 place-items-center rounded-2xl transition ${
           selected ? tones.icon : tones.iconOff
         }`}
       >
         {icon}
       </span>
-      <span className="text-lg font-bold leading-none">{label}</span>
-      <span className="text-xs opacity-70">{hint}</span>
+      <span className="text-base font-extrabold leading-none">{label}</span>
+      <span className="text-[11px] font-medium opacity-80">{hint}</span>
       {selected && (
-        <span className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-full bg-current animate-pop">
-          <CheckIcon className="h-4 w-4 text-white" strokeWidth={3} />
+        <span className="absolute right-2 top-2 grid h-5 w-5 place-items-center rounded-full bg-current text-white animate-pop">
+          <CheckIcon className="h-3.5 w-3.5" strokeWidth={3} />
         </span>
       )}
-      <span className="pointer-events-none absolute inset-0 rounded-2xl ring-brand-500/40 peer-focus-visible:ring-4" />
     </label>
   );
 }
 
-function SuccessOverlay({ position, onNew }: { position: LatLng; onNew: () => void }) {
+function SuccessOverlay({
+  position,
+  onViewMap,
+  onNew,
+}: {
+  position: LatLng;
+  onViewMap: () => void;
+  onNew: () => void;
+}) {
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-labelledby="sucesso-titulo"
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-4 backdrop-blur-sm animate-fade sm:items-center"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/75 p-3 backdrop-blur-md animate-fade"
     >
-      <div className="w-full max-w-md rounded-3xl bg-white p-6 text-center shadow-2xl animate-slide-up">
-        <span className="mx-auto mb-4 grid h-20 w-20 place-items-center rounded-full bg-emerald-100 text-emerald-600 animate-pop">
-          <CheckIcon className="h-10 w-10" strokeWidth={3} />
+      <div className="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl animate-slide-up">
+        <span className="mx-auto mb-3 grid h-16 w-16 place-items-center rounded-2xl bg-emerald-100 text-emerald-600 animate-pop">
+          <CheckIcon className="h-9 w-9" strokeWidth={3} />
         </span>
-        <h2 id="sucesso-titulo" className="text-2xl font-bold text-slate-900">
-          Registro enviado!
+        <h2 className="text-xl font-extrabold text-slate-900">
+          Registro Salvo!
         </h2>
-        <p className="mt-2 text-slate-600">
+        <p className="mt-1.5 text-xs font-medium text-slate-600">
           Obrigado por ajudar a proteger o Lago Paranoá.
         </p>
-        <p className="mt-3 font-mono text-xs text-slate-400">
-          {position.lat.toFixed(6)}, {position.lng.toFixed(6)}
+        <p className="mt-2 font-mono text-[11px] text-slate-400">
+          {position.lat.toFixed(5)}, {position.lng.toFixed(5)}
         </p>
-        <button type="button" id="novo-registro-btn" onClick={onNew} className="btn-primary mt-6">
-          Registrar outro
-        </button>
+
+        <div className="mt-5 flex flex-col gap-2.5">
+          <button
+            type="button"
+            onClick={onViewMap}
+            className="btn-primary h-13 text-sm font-bold"
+          >
+            <MapIcon className="h-4 w-4" /> Ver no mapa do Lago
+          </button>
+          <button
+            type="button"
+            onClick={onNew}
+            className="flex h-12 w-full items-center justify-center rounded-xl bg-slate-100 text-xs font-bold text-slate-700 active:scale-95 transition"
+          >
+            Registrar outro ponto
+          </button>
+        </div>
       </div>
     </div>
   );
