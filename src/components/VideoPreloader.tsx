@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Volume2Icon, VolumeXIcon } from "./icons";
 
 interface VideoPreloaderProps {
   onComplete: () => void;
@@ -11,7 +10,6 @@ export default function VideoPreloader({ onComplete }: VideoPreloaderProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [fading, setFading] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [isMuted, setIsMuted] = useState(true);
 
   const handleFinish = () => {
     if (fading) return;
@@ -25,7 +23,7 @@ export default function VideoPreloader({ onComplete }: VideoPreloaderProps) {
     const video = videoRef.current;
     if (!video) return;
 
-    // Tenta reproduzir o vídeo automaticamente
+    // Tenta reproduzir o vídeo automaticamente (sempre mudo para compatibilidade com iOS/Android)
     const playPromise = video.play();
     if (playPromise !== undefined) {
       playPromise.catch((err) => {
@@ -60,13 +58,6 @@ export default function VideoPreloader({ onComplete }: VideoPreloaderProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const toggleSound = () => {
-    if (!videoRef.current) return;
-    const nextState = !videoRef.current.muted;
-    videoRef.current.muted = nextState;
-    setIsMuted(nextState);
-  };
-
   return (
     <div
       role="dialog"
@@ -75,12 +66,12 @@ export default function VideoPreloader({ onComplete }: VideoPreloaderProps) {
         fading ? "opacity-0 pointer-events-none" : "opacity-100"
       }`}
     >
-      {/* Vídeo em tela cheia com leve zoom cinematográfico */}
+      {/* Vídeo em tela cheia (curto e sem áudio) */}
       <video
         ref={videoRef}
         src="/hero2.mp4"
         autoPlay
-        muted={isMuted}
+        muted
         playsInline
         preload="auto"
         className="absolute inset-0 h-full w-full object-cover scale-105"
@@ -96,19 +87,12 @@ export default function VideoPreloader({ onComplete }: VideoPreloaderProps) {
           Monitoramento Ambiental
         </span>
 
-        {/* Botão de som */}
         <button
           type="button"
-          onClick={toggleSound}
-          aria-label={isMuted ? "Ativar som do vídeo" : "Desativar som do vídeo"}
-          title={isMuted ? "Ativar som" : "Desativar som"}
-          className="grid h-11 w-11 place-items-center rounded-full bg-slate-950/60 text-white backdrop-blur-md ring-1 ring-white/20 transition hover:bg-slate-950/90 active:scale-95"
+          onClick={handleFinish}
+          className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/90 backdrop-blur-md transition hover:bg-white/20 active:scale-95 border border-white/15"
         >
-          {isMuted ? (
-            <VolumeXIcon className="h-5 w-5" />
-          ) : (
-            <Volume2Icon className="h-5 w-5" />
-          )}
+          Pular
         </button>
       </div>
 
