@@ -275,16 +275,21 @@ export default function ReportScreen() {
       {/* ==================================================================== */}
       {/* CABEÇALHO MOBILE (Alto contraste sob luz solar)                     */}
       {/* ==================================================================== */}
-      <header className="relative z-30 flex shrink-0 items-center justify-between border-b border-brand-900/60 bg-gradient-to-r from-brand-900 via-brand-800 to-brand-700 px-4 py-2.5 pt-[max(0.6rem,env(safe-area-inset-top))] text-white shadow-md">
+      <header className="relative z-30 flex shrink-0 items-center justify-between border-b border-brand-900/60 bg-gradient-to-r from-brand-900 via-brand-800 to-brand-700 px-4 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] text-white shadow-md">
         <div className="flex items-center gap-2.5 min-w-0">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white/15 text-white ring-1 ring-white/20 backdrop-blur">
-            <PipeIcon className="h-6 w-6" />
-          </span>
+          <div className="flex h-10 items-center justify-center rounded-2xl bg-white/95 px-2 py-1 shadow-sm shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo.png"
+              alt="EcoParanoá"
+              className="h-7 w-auto object-contain"
+            />
+          </div>
           <div className="min-w-0">
-            <h1 className="truncate text-base font-extrabold tracking-tight">
-              Lago Paranoá
+            <h1 className="truncate text-base font-black tracking-tight leading-none text-white">
+              EcoParanoá
             </h1>
-            <p className="flex items-center gap-1.5 text-[11px] font-semibold text-brand-200">
+            <p className="flex items-center gap-1.5 text-[11px] font-semibold text-brand-200 mt-1">
               <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
               {userLocation
                 ? `GPS ±${Math.round(userLocation.accuracy)}m`
@@ -786,14 +791,18 @@ function SuccessOverlay({
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/75 p-3 backdrop-blur-md animate-fade"
     >
       <div className="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl animate-slide-up">
-        <span className="mx-auto mb-3 grid h-16 w-16 place-items-center rounded-2xl bg-emerald-100 text-emerald-600 animate-pop">
-          <CheckIcon className="h-9 w-9" strokeWidth={3} />
+        <div className="mx-auto mb-3 flex h-14 w-auto items-center justify-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="EcoParanoá" className="h-12 w-auto object-contain" />
+        </div>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800 animate-pop">
+          <CheckIcon className="h-4 w-4 text-emerald-600" strokeWidth={3} /> Registro Enviado!
         </span>
-        <h2 className="text-xl font-extrabold text-slate-900">
-          Registro Salvo!
+        <h2 className="mt-3 text-lg font-extrabold text-slate-900">
+          Obrigado por cuidar do Lago!
         </h2>
-        <p className="mt-1.5 text-xs font-medium text-slate-600">
-          Obrigado por ajudar a proteger o Lago Paranoá.
+        <p className="mt-1 text-xs font-medium text-slate-600 leading-relaxed">
+          Seu registro com foto e localização foi salvo e já está marcado no mapa do Lago Paranoá.
         </p>
         <p className="mt-2 font-mono text-[11px] text-slate-400">
           {position.lat.toFixed(5)}, {position.lng.toFixed(5)}

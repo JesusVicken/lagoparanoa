@@ -16,19 +16,19 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Registro de Escoamentos | Lago Paranoá",
+  title: "EcoParanoá | Monitoramento e Preservação do Lago Paranoá",
   description:
-    "Registre com foto e localização exata escoamentos e tubulações irregulares de água ou esgoto no Lago Paranoá.",
-  applicationName: "Escoamentos Paranoá",
+    "Ajude a cuidar do Lago Paranoá identificando e mapeando pontos de despejos e escoamentos clandestinos ou regulares com foto e geolocalização.",
+  applicationName: "EcoParanoá",
   appleWebApp: {
     capable: true,
-    title: "Escoamentos",
+    title: "EcoParanoá",
     statusBarStyle: "default",
   },
   formatDetection: { telephone: false },
   icons: {
-    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
-    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+    icon: [{ url: "/logo.png", type: "image/png" }],
+    apple: [{ url: "/logo.png", sizes: "180x180" }],
   },
 };
 
